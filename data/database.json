@@ -1,0 +1,100 @@
+{
+  "users": [
+    {
+      "id": "demo-host-1",
+      "name": "Sarah & Alex Jenkins",
+      "email": "host@eventwishes.com",
+      "image": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      "role": "host",
+      "createdAt": "2026-08-28T14:32:45.698Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "evt-264uUKuL",
+      "slug": "birthday-party",
+      "name": "Birthday party",
+      "date": "2026-09-21",
+      "hostEmail": "host@eventwishes.com",
+      "description": "Record 30 sec video",
+      "theme": "rose",
+      "maxDurationSec": 45,
+      "allowFileUpload": true,
+      "createdAt": "2026-09-01T06:59:01.116Z",
+      "updatedAt": "2026-09-01T06:59:01.116Z"
+    },
+    {
+      "id": "demo-wedding-2026",
+      "slug": "sarah-alex-wedding",
+      "name": "Sarah & Alex’s Golden Wedding Gala",
+      "date": "2026-09-15",
+      "hostEmail": "host@eventwishes.com",
+      "description": "Join us in capturing unforgettable memories! Leave a heartfelt video wish for Sarah & Alex.",
+      "theme": "gold",
+      "maxDurationSec": 45,
+      "coverImage": "https://images.unsplash.com/photo-1519741497674-611481863552?w=1200&auto=format&fit=crop&q=80",
+      "allowFileUpload": true,
+      "createdAt": "2026-08-25T14:32:45.698Z",
+      "updatedAt": "2026-08-28T14:32:45.698Z"
+    },
+    {
+      "id": "demo-tech-summit-2026",
+      "slug": "global-tech-summit",
+      "name": "Global Tech Innovators Summit 2026",
+      "date": "2026-10-20",
+      "hostEmail": "host@eventwishes.com",
+      "description": "Share your key takeaways, speaker shout-outs, and future tech wishes for the summit wall!",
+      "theme": "neon",
+      "maxDurationSec": 60,
+      "coverImage": "https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1200&auto=format&fit=crop&q=80",
+      "allowFileUpload": true,
+      "createdAt": "2026-08-26T14:32:45.698Z",
+      "updatedAt": "2026-08-28T14:32:45.698Z"
+    }
+  ],
+  "wishes": [
+    {
+      "id": "wish-1",
+      "eventId": "demo-wedding-2026",
+      "guestName": "Jessica Miller",
+      "message": "Wishing you both a lifetime of eternal love, happiness, and unforgettable adventures!",
+      "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-young-woman-talking-on-a-video-call-with-her-phone-41487-large.mp4",
+      "duration": 18,
+      "status": "approved",
+      "createdAt": "2026-08-28T09:32:45.698Z",
+      "moderatedAt": "2026-08-28T10:32:45.698Z"
+    },
+    {
+      "id": "wish-2",
+      "eventId": "demo-wedding-2026",
+      "guestName": "David & Emily Chen",
+      "message": "So honored to celebrate with you guys tonight! Dance like nobody is watching!",
+      "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-happy-friends-holding-sparklers-at-a-party-41370-large.mp4",
+      "duration": 24,
+      "status": "approved",
+      "createdAt": "2026-08-28T11:32:45.698Z",
+      "moderatedAt": "2026-08-28T12:32:45.698Z"
+    },
+    {
+      "id": "wish-3",
+      "eventId": "demo-wedding-2026",
+      "guestName": "Grandma Eleanor",
+      "message": "May God bless your sacred bond every single day. Congratulations darling!",
+      "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-portrait-of-a-woman-smiling-at-the-camera-42416-large.mp4",
+      "duration": 15,
+      "status": "pending",
+      "createdAt": "2026-08-28T14:02:45.698Z"
+    },
+    {
+      "id": "wish-4",
+      "eventId": "demo-tech-summit-2026",
+      "guestName": "Marcus Vance (AI Lead)",
+      "message": "Mind-blowing keynote on agentic systems! Excited for what we build together.",
+      "videoUrl": "https://assets.mixkit.co/videos/preview/mixkit-man-talking-to-the-camera-with-earphones-41584-large.mp4",
+      "duration": 20,
+      "status": "approved",
+      "createdAt": "2026-08-28T08:32:45.698Z",
+      "moderatedAt": "2026-08-28T09:32:45.698Z"
+    }
+  ]
+}
