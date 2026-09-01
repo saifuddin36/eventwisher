@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const event = db.getEventById(id);
+    const event = await db.getEventById(id);
 
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
@@ -28,7 +28,7 @@ export async function PATCH(
     const { id } = await params;
     const updates = await req.json();
 
-    const updated = db.updateEvent(id, updates);
+    const updated = await db.updateEvent(id, updates);
     if (!updated) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
@@ -46,7 +46,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const deleted = db.deleteEvent(id);
+    const deleted = await db.deleteEvent(id);
 
     if (!deleted) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EventItem, VideoWish, User, CreateEventInput, WishStatus } from '@/types';
 import { nanoid } from 'nanoid';
+import { getSupabaseServer } from './supabase';
 
 interface DatabaseSchema {
   users: User[];
@@ -13,7 +14,7 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
 const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
 
-// Ensure directories exist
+// Ensure directories exist for local fallback
 function ensureDirs() {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -23,7 +24,7 @@ function ensureDirs() {
   }
 }
 
-// Initial demo seed data
+// Initial demo seed data for local fallback
 const initialData: DatabaseSchema = {
   users: [
     {
@@ -115,28 +116,98 @@ const initialData: DatabaseSchema = {
 function readDb(): DatabaseSchema {
   ensureDirs();
   if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), 'utf-8');
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2), 'utf-8');
+    } catch {}
     return initialData;
   }
   try {
     const raw = fs.readFileSync(DB_FILE, 'utf-8');
     return JSON.parse(raw) as DatabaseSchema;
   } catch (err) {
-    console.error('Error reading database, restoring initial:', err);
+    console.error('Error reading local database:', err);
     return initialData;
   }
 }
 
 function writeDb(data: DatabaseSchema) {
-  ensureDirs();
-  const tempFile = `${DB_FILE}.${Date.now()}.tmp`;
-  fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
-  fs.renameSync(tempFile, DB_FILE);
+  try {
+    ensureDirs();
+    const tempFile = `${DB_FILE}.${Date.now()}.tmp`;
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
+    fs.renameSync(tempFile, DB_FILE);
+  } catch (e) {
+    console.error('Local db write failed:', e);
+  }
+}
+
+// Helpers to map Supabase database rows to TypeScript interfaces
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapDbEvent(row: any): EventItem {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    date: row.date,
+    hostEmail: row.host_email,
+    description: row.description || '',
+    theme: row.theme || 'gold',
+    maxDurationSec: row.max_duration_sec || 45,
+    coverImage: row.cover_image,
+    allowFileUpload: row.allow_file_upload ?? true,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapDbWish(row: any): VideoWish {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    guestName: row.guest_name,
+    message: row.message || '',
+    videoUrl: row.video_url,
+    duration: row.duration || 15,
+    fileSize: row.file_size ? Number(row.file_size) : undefined,
+    mimeType: row.mime_type,
+    status: row.status as WishStatus,
+    createdAt: row.created_at,
+    moderatedAt: row.moderated_at,
+  };
 }
 
 export const db = {
-  // Events
-  getEventsByHost: (hostEmail: string): EventItem[] => {
+  // ===================== EVENTS =====================
+  getEventsByHost: async (hostEmail: string): Promise<EventItem[]> => {
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      const normalizedEmail = hostEmail.toLowerCase();
+      let query = supabase.from('events').select('*').order('created_at', { ascending: false });
+      if (normalizedEmail !== 'admin@eventwishes.com') {
+        query = query.ilike('host_email', normalizedEmail);
+      }
+      const { data: events, error } = await query;
+      if (error) {
+        console.error('Supabase getEventsByHost error:', error);
+        return [];
+      }
+      const { data: wishes } = await supabase.from('wishes').select('id, event_id, status');
+      const allWishes = wishes || [];
+
+      return (events || []).map((event) => {
+        const eventWishes = allWishes.filter((w) => w.event_id === event.id);
+        return {
+          ...mapDbEvent(event),
+          totalWishes: eventWishes.length,
+          pendingWishes: eventWishes.filter((w) => w.status === 'pending').length,
+          approvedWishes: eventWishes.filter((w) => w.status === 'approved').length,
+          rejectedWishes: eventWishes.filter((w) => w.status === 'rejected').length,
+        };
+      });
+    }
+
+    // Local JSON Fallback
     const data = readDb();
     const normalizedEmail = hostEmail.toLowerCase();
     return data.events
@@ -154,7 +225,33 @@ export const db = {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
-  getAllEvents: (): EventItem[] => {
+  getAllEvents: async (): Promise<EventItem[]> => {
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      const { data: events, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('Supabase getAllEvents error:', error);
+        return [];
+      }
+      const { data: wishes } = await supabase.from('wishes').select('id, event_id, status');
+      const allWishes = wishes || [];
+
+      return (events || []).map((event) => {
+        const eventWishes = allWishes.filter((w) => w.event_id === event.id);
+        return {
+          ...mapDbEvent(event),
+          totalWishes: eventWishes.length,
+          pendingWishes: eventWishes.filter((w) => w.status === 'pending').length,
+          approvedWishes: eventWishes.filter((w) => w.status === 'approved').length,
+          rejectedWishes: eventWishes.filter((w) => w.status === 'rejected').length,
+        };
+      });
+    }
+
+    // Local Fallback
     const data = readDb();
     return data.events.map((event) => {
       const wishes = data.wishes.filter((w) => w.eventId === event.id);
@@ -168,7 +265,33 @@ export const db = {
     });
   },
 
-  getEventById: (idOrSlug: string): EventItem | null => {
+  getEventById: async (idOrSlug: string): Promise<EventItem | null> => {
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      const { data: event, error } = await supabase
+        .from('events')
+        .select('*')
+        .or(`id.eq.${idOrSlug},slug.eq.${idOrSlug}`)
+        .maybeSingle();
+
+      if (error || !event) return null;
+
+      const { data: wishes } = await supabase
+        .from('wishes')
+        .select('id, status')
+        .eq('event_id', event.id);
+
+      const eventWishes = wishes || [];
+      return {
+        ...mapDbEvent(event),
+        totalWishes: eventWishes.length,
+        pendingWishes: eventWishes.filter((w) => w.status === 'pending').length,
+        approvedWishes: eventWishes.filter((w) => w.status === 'approved').length,
+        rejectedWishes: eventWishes.filter((w) => w.status === 'rejected').length,
+      };
+    }
+
+    // Local Fallback
     const data = readDb();
     const event = data.events.find((e) => e.id === idOrSlug || e.slug === idOrSlug);
     if (!event) return null;
@@ -182,14 +305,45 @@ export const db = {
     };
   },
 
-  createEvent: (input: CreateEventInput): EventItem => {
-    const data = readDb();
+  createEvent: async (input: CreateEventInput): Promise<EventItem> => {
     const id = `evt-${nanoid(8)}`;
-    const slug = input.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)+/g, '') || id;
+    const slug =
+      input.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)+/g, '') || id;
 
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      const row = {
+        id,
+        slug,
+        name: input.name,
+        date: input.date,
+        host_email: input.hostEmail.toLowerCase(),
+        description: input.description || '',
+        theme: input.theme || 'gold',
+        max_duration_sec: input.maxDurationSec || 45,
+        allow_file_upload: true,
+      };
+
+      const { data, error } = await supabase.from('events').insert(row).select().single();
+      if (error) {
+        console.error('Supabase createEvent error:', error);
+        throw error;
+      }
+
+      return {
+        ...mapDbEvent(data),
+        totalWishes: 0,
+        pendingWishes: 0,
+        approvedWishes: 0,
+        rejectedWishes: 0,
+      };
+    }
+
+    // Local Fallback
+    const data = readDb();
     const newEvent: EventItem = {
       id,
       slug,
@@ -215,7 +369,30 @@ export const db = {
     };
   },
 
-  updateEvent: (id: string, updates: Partial<EventItem>): EventItem | null => {
+  updateEvent: async (id: string, updates: Partial<EventItem>): Promise<EventItem | null> => {
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dbUpdates: any = {
+        updated_at: new Date().toISOString(),
+      };
+      if (updates.name !== undefined) dbUpdates.name = updates.name;
+      if (updates.date !== undefined) dbUpdates.date = updates.date;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.theme !== undefined) dbUpdates.theme = updates.theme;
+      if (updates.maxDurationSec !== undefined) dbUpdates.max_duration_sec = updates.maxDurationSec;
+      if (updates.coverImage !== undefined) dbUpdates.cover_image = updates.coverImage;
+      if (updates.allowFileUpload !== undefined) dbUpdates.allow_file_upload = updates.allowFileUpload;
+
+      const { error } = await supabase.from('events').update(dbUpdates).eq('id', id);
+      if (error) {
+        console.error('Supabase updateEvent error:', error);
+        return null;
+      }
+      return await db.getEventById(id);
+    }
+
+    // Local Fallback
     const data = readDb();
     const index = data.events.findIndex((e) => e.id === id);
     if (index === -1) return null;
@@ -226,10 +403,21 @@ export const db = {
       updatedAt: new Date().toISOString(),
     };
     writeDb(data);
-    return db.getEventById(id);
+    return await db.getEventById(id);
   },
 
-  deleteEvent: (id: string): boolean => {
+  deleteEvent: async (id: string): Promise<boolean> => {
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      const { error } = await supabase.from('events').delete().eq('id', id);
+      if (error) {
+        console.error('Supabase deleteEvent error:', error);
+        return false;
+      }
+      return true;
+    }
+
+    // Local Fallback
     const data = readDb();
     const initialCount = data.events.length;
     data.events = data.events.filter((e) => e.id !== id);
@@ -241,8 +429,29 @@ export const db = {
     return false;
   },
 
-  // Wishes
-  getWishesByEvent: (eventId: string, status?: WishStatus): VideoWish[] => {
+  // ===================== WISHES =====================
+  getWishesByEvent: async (eventId: string, status?: WishStatus): Promise<VideoWish[]> => {
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      let query = supabase
+        .from('wishes')
+        .select('*')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false });
+
+      if (status) {
+        query = query.eq('status', status);
+      }
+
+      const { data: wishes, error } = await query;
+      if (error) {
+        console.error('Supabase getWishesByEvent error:', error);
+        return [];
+      }
+      return (wishes || []).map(mapDbWish);
+    }
+
+    // Local Fallback
     const data = readDb();
     let wishes = data.wishes.filter((w) => w.eventId === eventId);
     if (status) {
@@ -251,11 +460,11 @@ export const db = {
     return wishes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
-  getApprovedWishes: (eventId: string): VideoWish[] => {
-    return db.getWishesByEvent(eventId, 'approved');
+  getApprovedWishes: async (eventId: string): Promise<VideoWish[]> => {
+    return await db.getWishesByEvent(eventId, 'approved');
   },
 
-  createWish: (wishData: {
+  createWish: async (wishData: {
     eventId: string;
     guestName: string;
     message?: string;
@@ -263,18 +472,46 @@ export const db = {
     duration?: number;
     fileSize?: number;
     mimeType?: string;
-  }): VideoWish => {
+  }): Promise<VideoWish> => {
+    const id = `wish-${nanoid(10)}`;
+    const guestName = wishData.guestName.trim() || 'Anonymous Guest';
+    const message = wishData.message?.trim() || '';
+    const duration = wishData.duration || 15;
+
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      const row = {
+        id,
+        event_id: wishData.eventId,
+        guest_name: guestName,
+        message,
+        video_url: wishData.videoUrl,
+        duration,
+        file_size: wishData.fileSize || null,
+        mime_type: wishData.mimeType || null,
+        status: 'pending',
+      };
+
+      const { data, error } = await supabase.from('wishes').insert(row).select().single();
+      if (error) {
+        console.error('Supabase createWish error:', error);
+        throw error;
+      }
+      return mapDbWish(data);
+    }
+
+    // Local Fallback
     const data = readDb();
     const newWish: VideoWish = {
-      id: `wish-${nanoid(10)}`,
+      id,
       eventId: wishData.eventId,
-      guestName: wishData.guestName.trim() || 'Anonymous Guest',
-      message: wishData.message?.trim() || '',
+      guestName,
+      message,
       videoUrl: wishData.videoUrl,
-      duration: wishData.duration || 15,
+      duration,
       fileSize: wishData.fileSize,
       mimeType: wishData.mimeType,
-      status: 'pending', // Pending host moderation
+      status: 'pending',
       createdAt: new Date().toISOString(),
     };
 
@@ -283,7 +520,27 @@ export const db = {
     return newWish;
   },
 
-  updateWishStatus: (wishId: string, status: WishStatus): VideoWish | null => {
+  updateWishStatus: async (wishId: string, status: WishStatus): Promise<VideoWish | null> => {
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('wishes')
+        .update({
+          status,
+          moderated_at: new Date().toISOString(),
+        })
+        .eq('id', wishId)
+        .select()
+        .maybeSingle();
+
+      if (error || !data) {
+        console.error('Supabase updateWishStatus error:', error);
+        return null;
+      }
+      return mapDbWish(data);
+    }
+
+    // Local Fallback
     const data = readDb();
     const wish = data.wishes.find((w) => w.id === wishId);
     if (!wish) return null;
@@ -294,7 +551,26 @@ export const db = {
     return wish;
   },
 
-  bulkUpdateWishStatus: (wishIds: string[], status: WishStatus): number => {
+  bulkUpdateWishStatus: async (wishIds: string[], status: WishStatus): Promise<number> => {
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('wishes')
+        .update({
+          status,
+          moderated_at: new Date().toISOString(),
+        })
+        .in('id', wishIds)
+        .select();
+
+      if (error) {
+        console.error('Supabase bulkUpdateWishStatus error:', error);
+        return 0;
+      }
+      return data?.length || 0;
+    }
+
+    // Local Fallback
     const data = readDb();
     let count = 0;
     const now = new Date().toISOString();
@@ -311,7 +587,18 @@ export const db = {
     return count;
   },
 
-  deleteWish: (wishId: string): boolean => {
+  deleteWish: async (wishId: string): Promise<boolean> => {
+    const supabase = getSupabaseServer();
+    if (supabase) {
+      const { error } = await supabase.from('wishes').delete().eq('id', wishId);
+      if (error) {
+        console.error('Supabase deleteWish error:', error);
+        return false;
+      }
+      return true;
+    }
+
+    // Local Fallback
     const data = readDb();
     const initialCount = data.wishes.length;
     data.wishes = data.wishes.filter((w) => w.id !== wishId);

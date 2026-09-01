@@ -13,11 +13,11 @@ export async function GET(req: NextRequest) {
 
     if (!email) {
       // If no host specified, return all events for public/demo overview
-      const events = db.getAllEvents();
+      const events = await db.getAllEvents();
       return NextResponse.json({ events });
     }
 
-    const events = db.getEventsByHost(email);
+    const events = await db.getEventsByHost(email);
     return NextResponse.json({ events });
   } catch (error) {
     console.error('Failed to get events:', error);
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const newEvent = db.createEvent({
+    const newEvent = await db.createEvent({
       name,
       date,
       hostEmail,

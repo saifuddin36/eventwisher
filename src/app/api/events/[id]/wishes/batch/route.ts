@@ -15,8 +15,8 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid wishIds array or status' }, { status: 400 });
     }
 
-    const count = db.bulkUpdateWishStatus(wishIds, status);
-    const updatedWishes = db.getWishesByEvent(id);
+    const count = await db.bulkUpdateWishStatus(wishIds, status);
+    const updatedWishes = await db.getWishesByEvent(id);
 
     return NextResponse.json({ updatedCount: count, wishes: updatedWishes });
   } catch (error) {

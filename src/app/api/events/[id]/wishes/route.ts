@@ -11,12 +11,12 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') as WishStatus | null;
 
-    const event = db.getEventById(id);
+    const event = await db.getEventById(id);
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    const wishes = db.getWishesByEvent(event.id, status || undefined);
+    const wishes = await db.getWishesByEvent(event.id, status || undefined);
     return NextResponse.json({ wishes, event });
   } catch (error) {
     console.error('Failed to get wishes:', error);
@@ -30,7 +30,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const event = db.getEventById(id);
+    const event = await db.getEventById(id);
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
@@ -42,7 +42,7 @@ export async function POST(
       return NextResponse.json({ error: 'Video URL is required' }, { status: 400 });
     }
 
-    const newWish = db.createWish({
+    const newWish = await db.createWish({
       eventId: event.id,
       guestName: guestName || 'Anonymous Guest',
       message: message || '',

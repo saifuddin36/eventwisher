@@ -15,7 +15,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Valid status (pending, approved, rejected) is required' }, { status: 400 });
     }
 
-    const updatedWish = db.updateWishStatus(wishId, status);
+    const updatedWish = await db.updateWishStatus(wishId, status);
     if (!updatedWish) {
       return NextResponse.json({ error: 'Wish not found' }, { status: 404 });
     }
@@ -33,7 +33,7 @@ export async function DELETE(
 ) {
   try {
     const { wishId } = await params;
-    const deleted = db.deleteWish(wishId);
+    const deleted = await db.deleteWish(wishId);
 
     if (!deleted) {
       return NextResponse.json({ error: 'Wish not found' }, { status: 404 });
