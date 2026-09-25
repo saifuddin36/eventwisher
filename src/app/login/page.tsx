@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
-import { signIn } from 'next-auth/react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { signIn, getProviders } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
-import { Sparkles, Video, ArrowRight, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { Sparkles, Video, ArrowRight, CheckCircle2, AlertCircle, Loader2, Info } from 'lucide-react';
 import Link from 'next/link';
 
 function LoginForm() {
@@ -14,17 +14,26 @@ function LoginForm() {
   const [name, setName] = useState('Sarah & Alex (Demo Host)');
   const [loadingDemo, setLoadingDemo] = useState(false);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
+  const [hasGoogleProvider, setHasGoogleProvider] = useState<boolean | null>(null);
+  const [customError, setCustomError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check if Google Provider is configured on server
+    getProviders().then((providers) => {
+      setHasGoogleProvider(Boolean(providers?.google));
+    }).catch(() => {
+      setHasGoogleProvider(false);
+    });
+  }, []);
 
   const getErrorMessage = (error: string | null) => {
     if (!error) return null;
     switch (error) {
       case 'OAuthSignin':
       case 'OAuthCallback':
-        return 'Could not sign in with Google. Make sure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are configured in your environment.';
+        return 'Could not connect with Google. Please ensure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are configured in .env.local.';
       case 'OAuthCreateAccount':
-        return 'Could not create a user account with Google.';
-      case 'Callback':
-        return 'Authentication callback failed. Please try again.';
+        return 'Could not create account with Google.';
       case 'AccessDenied':
         return 'Access denied. You do not have permission to sign in.';
       default:
@@ -32,14 +41,27 @@ function LoginForm() {
     }
   };
 
-  const errorMessage = getErrorMessage(errorParam);
+  const errorMessage = customError || getErrorMessage(errorParam);
 
   const handleGoogleSignIn = async () => {
+    setCustomError(null);
+    if (hasGoogleProvider === false) {
+      setCustomError(
+        'Google OAuth keys are not set yet in your .env.local file. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, or use the 1-Click Host Login below!'
+      );
+      return;
+    }
+
     try {
       setLoadingGoogle(true);
-      await signIn('google', { callbackUrl: '/dashboard' });
+      const res = await signIn('google', { callbackUrl: '/dashboard', redirect: true });
+      if (res?.error) {
+        setCustomError('Google sign in error: ' + res.error);
+        setLoadingGoogle(false);
+      }
     } catch (err) {
       console.error('Google sign in error:', err);
+      setCustomError('Failed to initiate Google sign in. Please check your credentials.');
       setLoadingGoogle(false);
     }
   };
@@ -74,7 +96,7 @@ function LoginForm() {
         </p>
       </div>
 
-      {/* Error Alert if OAuth error */}
+      {/* Error Alert */}
       {errorMessage && (
         <div className="mb-5 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
           <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
@@ -87,7 +109,7 @@ function LoginForm() {
         <button
           onClick={handleGoogleSignIn}
           disabled={loadingGoogle}
-          className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white hover:bg-zinc-100 active:bg-zinc-200 text-zinc-900 font-bold text-sm shadow-lg transition-all transform hover:scale-[1.01] disabled:opacity-75"
+          className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl bg-white hover:bg-zinc-100 active:bg-zinc-200 text-zinc-900 font-bold text-sm shadow-lg transition-all transform hover:scale-[1.01] disabled:opacity-75 relative cursor-pointer"
         >
           {loadingGoogle ? (
             <>
@@ -119,11 +141,18 @@ function LoginForm() {
           )}
         </button>
 
+        {hasGoogleProvider === false && (
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300/90 text-[11px] flex items-center gap-2">
+            <Info className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>Google keys missing in .env.local. Use Demo Host access below!</span>
+          </div>
+        )}
+
         {/* Divider */}
         <div className="relative flex items-center justify-center my-6">
           <div className="border-t border-white/10 w-full" />
           <span className="bg-[#0f111a] px-3 text-[11px] font-semibold text-zinc-400 uppercase tracking-wider relative">
-            Or Demo Host Access
+            Or 1-Click Host Demo
           </span>
         </div>
 
@@ -158,7 +187,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loadingDemo}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold text-sm shadow-xl shadow-amber-500/20 transition-all hover:scale-[1.01] disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-bold text-sm shadow-xl shadow-amber-500/20 transition-all hover:scale-[1.01] disabled:opacity-50 cursor-pointer"
           >
             {loadingDemo ? (
               <>
